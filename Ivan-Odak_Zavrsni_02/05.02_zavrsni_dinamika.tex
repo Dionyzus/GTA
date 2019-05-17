@@ -1,0 +1,733 @@
+\section{Dionyzus}
+U ovom dijelu će biti opisana igra, odnosno kompletan projekt, najvažniji koraci prema izradi, te će biti objašnjeni neki ključni koncepti koji su korišteni tijekom izrade igre.
+\subsection{Osnovne skripte za upravljanje s likom}
+Glavna skripta koja je zadužena za stvaranje, odnosno inicijalizaciju svih potrebnih komponenti unutar igre je GameManger, to je skripta koja ne implementira Monobehaviour klasu, što znači da ju nije potrebno pridružiti niti jednom objektu. GameManager je zadužen za inicijalizaciju komponenti kao što su InputController, odnosno skripta koje implementira logiku unosa igrača, Timer koji je korišten za potrebe stvaranja vremenskog perioda koji je potreban da se neka radnja izvrši, Respawner, koji je korišten za ponovno instanciranje objekata unutar scene ako je to potrebno te EventBus koji implementira logiku različitih događaja koji se okidaju tijekom igranja. Jedan od tih eventa je i instanciranje glavnog igrača.
+Dio te skripte je prikazan u k\^odu ispod~\ref{GameManager}.
+\begin{lstlisting}[caption={Menadžer igre}, label=GameManager]
+    public event System.Action<Player> OnLocalPlayerJoined;
+    private GameObject gameObject;
+
+    public bool IsPaused { get; set; }
+
+    private static GameManager m_Instance;
+    public static GameManager Instance
+    {
+        get
+        {
+            if (m_Instance == null)
+            {
+                m_Instance = new GameManager();
+                m_Instance.gameObject = new GameObject("_gameManager");
+                m_Instance.gameObject.AddComponent<InputController>();
+                m_Instance.gameObject.AddComponent<Timer>();
+                m_Instance.gameObject.AddComponent<Respawner>();
+            }
+            return m_Instance;
+        }
+    }
+    private InputController m_InputController;
+    public InputController InputController
+    {
+        get
+        {
+            if (m_InputController == null)
+            {
+                m_InputController = gameObject.GetComponent<InputController>();
+            }
+            return m_InputController;
+        }
+    }
+\end{lstlisting}
+
+Kao što je već navedeno Dionyzus je 3D igre, što znači da se radi o tri dimenzije, dakle sav okoliš kao, glavni lik te ostali likovi koji se pojavljuju u igri su u tri dimenzije. To zahtjeva rad s 3D modelima te je isto tako potrebno realizirati mehanike svih tih objekata. Isto tako igranje igre je iz trećeg lica što znači da je potrebno koristiti vjerodostojne animacije glavnog lika kako bi se uspješno dočarale sve radnje tijekom igranja. 
+S tim rečenim, prvi zadatak je realizirati kretnje unutar svijeta igre. Kretnje su omogućene korištenjem komponente kontroler lika (engl.~\textit{CharacterController}), ta komponenta koristi mehanike fizike te omogućava kretnje lika korištenjem sile. Prije prikaza skripte kratko će biti opisane sve mogućnosti lika vezane za kretnje. Ono što je za očekivati tijekom igre je naravno prelazak puta, to je omogućeno šetnjom, trčanjem te kretnjom u sagnutom položaju. Početno stanje je mirovanje, pritiskom odgovarajućih tipki na tipkovnici prelazi se u neko od prethodno navedenih stanja. Svaka od ovih mogućnosti je isto tako pokrivena odgovarajućim animacijama. Sve animacije korištene u igri su preuzete sa stranice Mixamo  \url{https://www.mixamo.com}, animacije su besplatne te je preuzimanje istih vrlo jednostavno. Sve što je potrebno je registrirati se, učitati lika na kojem želite da se odradi prilagođavanje animacija, odabiranje odgovarajuće animacije te spremanje lika unutar projekta. Ispod je prikazana skripta Player, unutar te skripte nalaze se sve najvažnije komponente koje su potrebne kako bi lik pravilno funkcionirao. K\^od ispod prikazuje Move  i LookAround metode u kojima je napisana potrebna logika kako bi se prethodno navedene funkcionalnosti omogućile ~\ref{MovePlayer}. Ono što se može istaknuti je provjera je li lik na zemlji, to je potrebno kako bi se omogućilo skakanje lika.
+\begin{lstlisting}[caption={LookAround i Move metode}, label=MovePlayer]
+    void LookAround()
+    {
+        mouseInput.x = Mathf.Lerp(mouseInput.x, playerInput.MouseInput.x, 1f / MouseControl.Damping.x);
+        mouseInput.y = Mathf.Lerp(mouseInput.y, playerInput.MouseInput.y, 1f / MouseControl.Damping.y);
+
+
+        transform.Rotate(Vector3.up * mouseInput.x * MouseControl.Sensitivity.x);
+
+        playerAim.SetRotation(mouseInput.y * MouseControl.Sensitivity.y);
+    }
+
+    void Move()
+    {
+        float moveSpeed = settings.WalkSpeed;
+        if (playerInput.IsRunning)
+        {
+            moveSpeed = settings.RunSpeed;
+        }
+        if (playerInput.IsSneaking)
+        {
+            moveSpeed = settings.SneakSpeed;
+        }
+        if (playerInput.IsCrouched)
+        {
+            moveSpeed = settings.CrouchSpeed;
+        }
+        if (PlayerState.MoveState == PlayerState.EMoveState.COVER)
+        {
+            moveSpeed = settings.WalkSpeed;
+        }
+       
+        if (!MoveController.isGrounded)
+        {
+
+            PlayerState.IsFalling = true;
+
+        }
+        if (MoveController.isGrounded)
+        {
+            // We are grounded, so recalculate
+            // move direction directly from axes
+            PlayerState.IsFalling = false;
+            moveDirection = new Vector3(playerInput.Horizontal, 0.0f, playerInput.Vertical);
+            moveDirection = transform.TransformDirection(moveDirection);
+            moveDirection = moveDirection * moveSpeed;
+
+            if (playerInput.Jump)
+            {
+                moveDirection.y = jumpSpeed;
+            }
+        }
+        if (Vector3.Distance(moveDirection * Time.deltaTime, previousPosition) > minimumMoveThreshold)
+        {
+            footSteps.Play();
+        }
+
+        // Apply gravity
+        moveDirection.y = moveDirection.y - (gravity * Time.deltaTime);
+
+        // Move the controller
+        MoveController.Move(moveDirection * Time.deltaTime);
+    }
+}
+\end{lstlisting}
+
+Osim omogućavanja kretnji  potrebno je i zabilježiti iste te znati gdje se lik kreče. Za to nam je naravno potrebna kamera. ThirdPersonCamera skripta implementira logiku kamere. Unutar skripte traži se objekt AimingPivot koji se nalazi na glavnom liku, omogućeno je mijenjanje udaljenosti s koje će se promatrati lik, brzina kojom će kamera pratiti kretnje lika, te isto tako promjena odstojanja ovisno o tome je li lik stoji ili je sagnut. Osim toga kako bi se spriječila pogreška prolaska vidnog polja kroz zidove, dodana je metoda gdje se provjerava sudara li se vidno polje kamere, odnosno linija koju odašilje kamera (engl.~\textit{Raycast}) s nekim od čvrstih objekata, u slučaju da je, sprječava se daljnji pomak kamere te se rotira u suprotnom smjeru. Sva logika kamere je napisana unutar LateUpdate metode.~\ref{ThirdCamera}
+\begin{lstlisting}[caption={Logika kamere}, label=ThirdCamera]
+    CameraRig cameraRig = defaultCamera;
+
+        if (localPlayer.PlayerState.WeaponState == PlayerState.EWeaponState.AIMING || localPlayer.PlayerState.WeaponState == PlayerState.EWeaponState.AIMEDFIRING)
+        {
+            cameraRig = aimCamera;
+        }
+
+        float targetHeight = cameraRig.CameraOffset.y + (localPlayer.PlayerState.MoveState == PlayerState.EMoveState.CROUCHING ? cameraRig.CrouchHeight : 0);
+        Vector3 targetPosition = cameraLookTarget.position + localPlayer.transform.forward * cameraRig.CameraOffset.z +
+            localPlayer.transform.up * targetHeight
+            + localPlayer.transform.right * cameraRig.CameraOffset.x;
+        Quaternion targetRotation = cameraLookTarget.rotation;
+
+        Vector3 collisionTargetPoint = cameraLookTarget.position + localPlayer.transform.up * targetHeight - localPlayer.transform.forward * 10f;
+        HandleCameraCollision(collisionTargetPoint, ref targetPosition);
+
+        transform.position = Vector3.Lerp(transform.position, targetPosition, cameraRig.Damping * Time.deltaTime);
+        transform.rotation = Quaternion.Lerp(transform.rotation, cameraLookTarget.rotation, cameraRig.Damping * Time.deltaTime);
+
+    }
+
+    private void HandleCameraCollision(Vector3 toTarget, ref Vector3 fromTarget)
+    {
+        RaycastHit hit;
+        if (Physics.Linecast(toTarget, fromTarget, out hit))
+        {
+            Vector3 hitPoint = new Vector3(hit.point.x + hit.normal.x * .2f, hit.point.y, hit.point.z + hit.normal.z * .2f);
+            fromTarget = new Vector3(hitPoint.x, fromTarget.y, hitPoint.z);
+        }
+
+    }
+\end{lstlisting}
+
+Ono što je vidljivo u obje skripte je PlayerState. To je skripta koja sadrži sva moguća stanja lika tijekom igranja. Stanja su podijeljena na dva glavna,a to su s oružjem (engl.~\textit{Armed}) te nenaoružan (engl.~\textit{Unarmed}), ta stanja su realizirana preko Enum tipa podatka. K\^od ispod prikazuje sva moguća stanja lika~\ref{PlayerState}.
+\begin{lstlisting}[caption={Stanja lika}, label=PlayerState]
+   public class PlayerState : MonoBehaviour
+  {
+    public enum EMoveState
+    {
+        WALKING,
+        RUNNING,
+        CROUCHING,
+        SNEAKING,
+        COVER,
+        FALLING
+    }
+
+    public enum EWeaponState
+    {
+        IDLE,
+        FIRING,
+        AIMING,
+        AIMEDFIRING
+    }
+\end{lstlisting}
+
+Ove funkcionalnosti zaokružujemo s dvije vrlo važne skripte, a to su InputController i PlayerAnimation. Skripte su međusobno povezane tako da igra osluškuje koje tipke su pritisnute od strane korisnika, potom se aktiviraju boolean vrijednosti, dakle istina ili laž koje svojom aktivacijom utječu na logiku napisanu unutar skritpe PlayerAnimation. Rad unutar prozora kontroler animacije je već prethodno opisan, ali samo će se napomenuti da su te boolean vrijednosti potrebne kako bi se omogućio prijelaz iz jednog stanja u drugo stanje lika. Skripta InputController nalazi se ispod~\ref{InputController}.
+\begin{lstlisting}[caption={Kontroler unosa korisnika}, label=InputController]
+ void Update()
+    {
+        if (EnterCar.InCar)
+        {
+            exitCar = Input.GetKey(KeyCode.L);
+        }
+        if (EnterCar.CanEnter)
+        {
+            enterCar = Input.GetKeyDown(KeyCode.Return);
+        }
+        Action = Input.GetKeyDown(KeyCode.E);
+        Escape = Input.GetKey(KeyCode.Escape);
+        Vertical = Input.GetAxis("Vertical");
+        Horizontal = Input.GetAxis("Horizontal");
+        MouseInput = new Vector2(Input.GetAxisRaw("Mouse X"), Input.GetAxisRaw("Mouse Y"));
+        Fire1 = Input.GetButton("Fire1");
+        Reload = Input.GetKeyDown(KeyCode.R);
+        IsRunning = Input.GetKey(KeyCode.LeftShift);
+        IsCrouched = Input.GetKey(KeyCode.C);
+        IsSneaking = Input.GetKey(KeyCode.V);
+        IsAiming = Input.GetButton("Fire2");
+        CoverToggle = Input.GetKeyDown(KeyCode.F);
+        Jump = Input.GetKeyDown(KeyCode.Space);
+
+        if (IsAiming)
+        {
+            Vertical = 0;
+            Horizontal = 0;
+        }
+        MouseWheelUp = Input.GetAxis("Mouse ScrollWheel") > 0;
+        MouseWheelDown = Input.GetAxis("Mouse ScrollWheel") < 0;
+    }
+\end{lstlisting}
+
+Sva logika se odvija unutar Update metode gdje se konstantno osluškuje unos korisnika, i ako je odgovarajuća tipka pritisnuta mijenja se status pripadajuće varijable. 
+Skripta ~\ref{PlayerAnimation} opisuje funkcionalnost animacija lika, k\^od se nalazi ispod.
+\begin{lstlisting}[caption={Animacije lika}, label=PlayerAnimation]
+ void Update()
+    {
+        if (GameManager.Instance.IsPaused)
+        {
+            return;
+        }
+        animator.SetFloat("Vertical", GameManager.Instance.InputController.Vertical);
+        animator.SetFloat("Horizontal", GameManager.Instance.InputController.Horizontal);
+
+        animator.SetBool("IsFalling", GameManager.Instance.LocalPlayer.PlayerState.IsFalling);
+
+        animator.SetBool("EnterCar", GameManager.Instance.InputController.enterCar);
+        animator.SetBool("ExitCar", GameManager.Instance.InputController.exitCar);
+
+        animator.SetBool("IsReloading",GameManager.Instance.InputController.Reload);
+        animator.SetBool("WeaponSwitch", GameManager.Instance.InputController.MouseWheelDown || GameManager.Instance.InputController.MouseWheelUp);
+        animator.SetBool("IsJump", GameManager.Instance.InputController.Jump);
+        animator.SetBool("IsRunning", GameManager.Instance.InputController.IsRunning);
+        animator.SetBool("IsSneaking", GameManager.Instance.InputController.IsSneaking);
+        animator.SetBool("IsCrouched", GameManager.Instance.InputController.IsCrouched);
+        animator.SetBool("IsFiring", GameManager.Instance.InputController.Fire1);
+        animator.SetBool("IsAiming", GameManager.Instance.LocalPlayer.PlayerState.WeaponState == PlayerState.EWeaponState.AIMING ||
+            GameManager.Instance.LocalPlayer.PlayerState.WeaponState == PlayerState.EWeaponState.AIMEDFIRING);
+        animator.SetFloat("AimAngle", playerAim.GetAngle());
+
+        animator.SetBool("IsInCover", GameManager.Instance.LocalPlayer.PlayerState.MoveState == PlayerState.EMoveState.COVER);
+    }
+\end{lstlisting}
+SetBool je jednostavna metoda, gdje se na temelju boolean vrijednosti mijenja odgovarajuča, odnosno istoimena varijabla unutar kontrolera animacija. Svim varijablama se pristupa preko instance GameManagera.
+Ovim skriptama je omogućeno instanciranje igre, glavnog lika te glavnih komponenti koje su potrebne kako bi igrač imao kontrolu nad likom te isto tako vidio što se događa unutar igre.
+\subsection{Energija i sistem oružja}
+Ovim dijelom nastavlja se opisivanje funkcionalnosti igre. Bit će opisan sistem oružja te mogućnost lika da umre unutar igre.
+Kada bi se lik mogao nesmetano kretati kroz svijet, odnosno bez opasnosti po vlastiti život to i ne bi bila zanimljiva igra otvorenog svijeta. Taj problem je riješen na standardan način da glavni lik kao i neprijatelji imaju energiju (engl.~\textit{Health points}), ali isto tako i bilo koji drugi objekt za koji je omogućeno da bude uništen. Glavna funkcionalnost je opisana unutar skripte Destructable, gdje se objektu koji sadrži ovu skriptu dodjeljuje energija, metode koje omogućuju oduzimanje energije, te mogućnost umiranja ako je vrijednost energije jednaka nuli. Ranjavanje i umiranje je riješeno korištenjem događaja (engl.~\textit{Event}) koji su sastavni dio C\# jezika. K\^od ispod prikazuje deklaraciju događaja te glavne metode koje omogućuju prethodno opisane funkcionalnosti~\ref{Destructable}. Osim toga dodan je i prikaz energije, što će detaljnije biti opisano u dijelu grafičkog sučelja igre. Sve što je potom potrebno napraviti je naslijediti ovu skriptu s pojedinom skriptom koja će pripadati različitim likovima unutar igre kako bi se postigle varijacije ako to igra zahtjeva.
+\begin{lstlisting}[caption={Energija lika}, label=Destructable]
+    [SerializeField] float hitPoints;
+    [SerializeField] Image healthBar;
+
+    public event System.Action OnDeath;
+    public event System.Action OnDamageReceived;
+
+    float damageTaken;
+
+    public virtual void Die()
+    {
+        if (IsAlive)
+            return;
+
+        if (OnDeath != null)
+        {
+            OnDeath();
+        }
+    }
+    public virtual void TakeDamage(float amount)
+    {
+        if (!IsAlive)
+        {
+            return;
+        }
+        if (amount > 0)
+        {
+            RandomHitAnimation();
+        }
+        damageTaken += amount;
+
+        if (OnDamageReceived != null)
+        {
+            OnDamageReceived();
+        }
+        if (HitPointsRemaining <= 0)
+        {
+            Die();
+        }
+    }
+\end{lstlisting}
+Kao što je vidljivo metode su virtualne, dakle moguće je pregaziti funkcionalnost istih.
+
+Sistem oružja je izveden preko nekoliko skripti koje su prikazane u tablici~\ref{fig:WeaponSystemTable}.
+\begin{table}
+\begin{tabularx}{0.9\textwidth}{lX}
+\hline
+Skripta&Opis \\
+\hline
+Shooter&Sadrži logiku pucanja. \\
+WeaponController&Sadrži logiku opskrbljivanjem s oružjem, odnosno korištenjem opreme.\\
+WeaponReloader&Sadrži logiku ponovnog punjenja oružja.\\
+WeaponRecoil&Sadrži logiku uzorka pucanja. \\
+Projectile&Sadrži logiku instanciranja odgovarajućeg projektila te efekta istog, kao i provjeravanje mjesta sudara. \\
+PlayerAim&Sadrži logiku ciljanja oružjem. \\
+Crosshair&Vizualno prikazuje nišan. \\
+\hline
+\end{tabularx}
+\caption{Sistem oružja}\label{fig:WeaponSystemTable}
+\end{table}
+Kratko će biti opisane funkcionalnosti svake od navedenih skripti, odnosno bit će prikazan i opisan glavni dio k\^oda unutar istih. 
+Shooter omogućava pucanje, dodavanjem ove skripte na objekt, potrebno je postaviti vrijednost frekvencije pucanja, dodati odgovarajući projektil kojeg će instancirati određeno oružje, te je potrebno da objekt sadrži dijete Muzzle. To je potrebno kako bi se omogućili efekti pucanja s oružjem te isto tako da bi se postavila ogledna točka iz koje će se usmjeravati projektil. Glavna metoda unutar skripte je virtualna metoda Fire, koja se može mijenjati ovisno o potrebi različitih oružja. Metoda se oslanja na broj metaka u spremniku i frekvenciju pucanja, u slučaju da je spremnik prazan ili nije prošao period frekvencije, onemogućeno je pucanje. U slučaju da je moguće pucati, instancira se projektil na lokaciji već spomenutog objekta Muzzle, projektil se kreče ovisno o tome gdje je usmjeren model oružja određenom brzinom. Put projektila, odnosno ono što predstavlja smjer projektila i što provjerava s čime se sudara je zraka (engl.~\textit{Ray}) koja je spomenuta i kod kamera. Osim toga prilikom pucanja se aktiviraju efekti kao što su zvuk i svjetlost kako bi pucanje bilo što Stvarnije. K\^od ispod prikazuje opisanu metodu~\ref{Shooter}.
+\begin{lstlisting}[caption={Skripta pucanja}, label=Shooter]
+public virtual void Fire()
+    {
+        light.SetActive(false);
+        canFire = false;
+        if (Time.time < nextFireAllowed || ShooterBlock.blockShooter == true)
+            return;
+        if (reloader != null)
+        {
+            if (reloader.IsReloading)
+            {
+                return;
+            }
+
+            if (reloader.RoundsRemainingInClip == 0)
+            {
+                emptyClip.Play();
+                return;
+            }
+            reloader.TakeFromClip(1);
+        }
+        nextFireAllowed = Time.time + rateOfFire;
+        bool isLocalPlayerControlled = AimTarget == null;
+        if (!isLocalPlayerControlled)
+        {
+            muzzle.LookAt(AimTarget.position + AimTargetOffset);
+        }
+
+        Projectile newBullet = (Projectile)Instantiate(projectile, muzzle.position, muzzle.rotation);
+
+        if (isLocalPlayerControlled)
+        {
+            Ray ray = Camera.main.ViewportPointToRay(new Vector3(.5f, .5f, 0));
+
+            RaycastHit hit;
+            Vector3 targetPosition = ray.GetPoint(500);
+
+            if (Physics.Raycast(ray, out hit))
+            {
+                targetPosition = hit.point;
+
+            }
+            newBullet.transform.LookAt(targetPosition + AimTargetOffset);
+        }
+        if(this.WeaponRecoil)
+        {
+            this.WeaponRecoil.Activate();
+        }
+        FireEffect();
+        audioFire.Play();
+        canFire = true;
+    }
+\end{lstlisting}
+
+Slijedeća skripta je WeaponController u kojoj je opisana logika korištenja oružja koje je dostupno igraču ako ga posjeduje te promjena oružja. Unutar skripte su deklarirana dva niza tipa Shooter, dakle objekti koji sadrže skriptu Shooter. Kada započne igra, provjeravaju se djeca objekta glavnog lika te se oružja razvrstavaju ovisno o tome posjeduje li ih trenutno igrač ili ih tek treba prikupiti. To je riješeno tako da se deaktiviraju sva oružja koja trenutno nisu dopuštena za korištenje, koja igrač ne posjeduje te će se aktivirati unutar niza omogućenih oružja u trenutku kada ih prikupi. Osim toga skripta sadrži metode koje omogućavaju aktiviranje oružja kojeg igrač posjeduje, metoda Equip te SwitchWeapon koja omogućuje promjenu oružja. Ako je moguće korisnik prilikom rotiranja kotačića miša mijenja oružje te mu je omogućeno pucanje iz tog oružja, a osim toga aktivira se i odgovarajuća slika koja predstavlja to oružje. K\^od ispod prikazuje dio navedenih funkcionalnosti~\ref{WeaponController}.
+\begin{lstlisting}[caption={Kontroler oružja}, label=WeaponController]
+    internal void SwitchWeapon(int direction)
+    {
+        CanFire = false;
+        currentWeaponIndex += direction;
+
+        if (currentWeaponIndex > weapons.Length - 1)
+        {
+            currentWeaponIndex = 0;
+        }
+        if (currentWeaponIndex < 0)
+        {
+            currentWeaponIndex = weapons.Length - 1;
+        }
+        GameManager.Instance.Timer.Add(() =>
+        {
+            Equip(currentWeaponIndex);
+        }, weaponSwitchTime);
+
+    }
+    internal void Equip(int indexOfWeapon)
+    {
+        DeactivateWeapons();
+        CanFire = true;
+
+        indexOfWeapon = CheckInactive(indexOfWeapon);
+        
+        m_ActiveWeapon = weapons[indexOfWeapon];
+        m_ActiveWeapon.Equip();
+
+        weapons[indexOfWeapon].gameObject.SetActive(true);
+        weapons[indexOfWeapon].GetComponent().WeaponImage.GetComponent().enabled = true;
+        weapons[indexOfWeapon].GetComponent().BulletImage.GetComponent().enabled = true;
+        weaponSwitch.Play();
+        if (OnWeaponSwitch != null)
+        {
+            OnWeaponSwitch(m_ActiveWeapon);
+        }
+    }
+\end{lstlisting}
+
+WeaponReloader je jednostavna skripta koja omogućava ponovno punjenje oružja pritiskom odgovarajuće tipke. Osim toga osluškuje promjenu broja metaka u spremniku, dakle prilikom pucanja taj broj se smanjuje, a nakon punjenja povećava.
+Kako pucanje ne bi bilo previše jednostavno, koristi se skripta WeaponRecoil, to je skripta koja sprječava igrača da puca u istom pravcu ako konstantno puca, dakle ovisno o parametrima mijenja smjer u kojem će se projektil kretati, tzv. trzaj oružja. Taj smjer nije kompletno nasumičan već je određen uzorkom koji je definiran za pojedino oružje. Način implementacije nalazi se u K\^odu ispod~\ref{WeaponRecoil}.
+\begin{lstlisting}[caption={Trzaj oružja tijekom pucanja}, label=WeaponRecoil]
+    void Update()
+    {
+        if (nextRecoilCooldown > Time.time)
+        {
+            recoilActiveTime += Time.deltaTime;
+            float percentage = GetPercentage();
+          
+            Vector3 recoilAmount = Vector3.zero;
+            for (int i = 0; i < layers.Length; i++)
+            {
+                recoilAmount += layers[i].direction * layers[i].curve.Evaluate(percentage);
+            }
+
+            this.Shooter.AimTargetOffset = Vector3.Lerp(Shooter.AimTargetOffset, Shooter.AimTargetOffset + recoilAmount, strength * Time.deltaTime);
+            this.Crosshair.ApplyScale(percentage * Random.Range(strength * 7, strength * 9));
+        }
+        else
+        {
+            recoilActiveTime -= Time.deltaTime;
+            if (recoilActiveTime < 0)
+            {
+                recoilActiveTime = 0;
+            }
+            this.Crosshair.ApplyScale(GetPercentage());
+            if (recoilActiveTime == 0)
+            {
+                this.Shooter.AimTargetOffset = Vector3.zero;
+                this.Crosshair.ApplyScale(0);
+
+            }
+        }
+    }
+    float GetPercentage()
+    {
+        float percentage = recoilActiveTime / recoilSpeed;
+        return Mathf.Clamp01(percentage);
+    }
+\end{lstlisting}
+
+Tijekom pucanja se instancira projektil, metak koji je usmjeren te ovisno o tome s čim se sudari, može napraviti štetu, odnosno smanjiti energiju mete ili je uništiti. Glavna logika je implementirana unutar metode CheckDestructable koja provjerava je li pogođena meta koju je moguće uništiti, ako je poziva se metoda TakeDamage, instancira krv, ako je pogođena meta koje predstavlja čovjeka te učinak, odnosno efekt udara koji nastane ako se metak sudari s čvrstim tijelom kao što je npr. zid.
+PlayerAim prati pokrete miša kako bi bilo omogućeno pucanje u odgovarajućem smjeru, a Crosshair iscrtava nišan koji omogućava igraču precizno ciljanje.
+\subsection{Funkcionalnosti neprijatelja}
+U ovom dijelu će biti opisane sve funkcionalnosti koje su dodijeljene neprijatelju kao što su kretanje, pretraživanje, sukob s igračem i slično.
+
+Skripte koje opisuju neprijatelja su navedene i kratko opisane u tablici~\ref{fig:EnemyTable}.
+\begin{table}
+\begin{tabularx}{0.9\textwidth}{lX}
+\hline
+Skripta&Opis \\
+\hline
+EnemyState&Stanja neprijatelja. \\
+EnemyPlayer&Glavna skripta koja upravlja svim ostalim komponentama.\\
+EnemyPatrol&Skripta koja iskorištava PathFinder i Scanner komponente.\\
+EnemyShoot&Kontrolira pucanje neprijatelja. \\
+EnemyHealth&Energija neprijatelja. \\
+EnemyAnimation&Upravlja animacijama neprijatelja ovisno o stanju. \\
+\hline
+\end{tabularx}
+\caption{Skripte koje implementiraju neprijatelja}\label{fig:EnemyTable}
+\end{table}
+Najvažnija skripta neprijatelja je EnemyPlayer, osim inicijalizacije svih ostalih komponenti, sadrži i logiku kako će se lik ponašati u različitim situacijama, kako se radi u neprijateljima, početno stanje svakog je patroliranje, a nakon što detektira igrača napada ga. Tim rečenim stanja neprijatelja su opisana u skript EnemyState gdje su moguća dva stanja Aware i Unaware, stanje kada je neprijatelj svjestan prisutnosti glavnog igrača i stanje kada nije. Navedene funkcionalnosti riješene su preko događaja koja su već prije opisana, osluškuju se stanja te ovisno o događaju izvršava se logika metoda. Metode su vrlo jednostavne, pretraživanje područja te prepoznavanje glavnog igrača koji je definiran vlastitim tagom. K\^od ispod prikazuje način kako se automatski sve potrebne skripte pridružuju objektu kada se doda EnemyPlayer skripta~\ref{EnemyPlayer}.
+\begin{lstlisting}[caption={Automatsko pridruživanje ovisnih skripti}, label=EnemyPlayer]
+[RequireComponent(typeof(PathFinder))]
+[RequireComponent(typeof(EnemyHealth))]
+[RequireComponent(typeof(EnemyState))]
+public class EnemyPlayer : MonoBehaviour
+{
+    [SerializeField] public Scanner playerScanner;
+    [SerializeField] Soldier settings;
+
+    PathFinder pathFinder;
+\end{lstlisting}
+Ključna riječ je RequireComponent, prima tip komponente koji će se automatski pridružiti objektu, te je potrebno inicijalizirati unutar editora sve što te skripte očekuju, to može biti pridruživanje nekog drugog objekta, neke varijable i slično. Osim toga prikazana je inicijalizacija dvije dodatne komponente, a to su Scanner i PathFinder. Scanner, u prijevodu pretraživanje je skripta koja sadrži logiku na koji će način neprijatelj pretraživati područje. Odredi se radijus pretraživanja, brzina te maska (engl.~\textit{LayerMask}), maska označava koje će područje biti uključeno u skeniranje, objektu se u nadglednom prozoru doda tag maske te je s tim određeno ono što neprijatelj treba detektirati. Uz to se provjerava nalazi li se prepreka ispred neprijatelja, odnosno smanjuje li išta vidno polje. Ovdje je za primjer korištena i mogućnost ekstenzija, to je vrlo koristan način na koji se mogu proširiti funkcionalnosti postojećih klasa. Metode trebaju biti static, dakle vrijede za cijelu klasu te se pozivaju bez inicijalizacije objekta. Prvi parametar metode mora biti ~\textit{this} te potom naziv Klase koja se proširuje. Ovdje je ta mogućnost korištena za Unity tip Transform, a metoda je IsInLineOfSight koja provjerava nalazi li se tražena meta unutar vidnog pogleda. Na ovaj način je vrlo jednostavno moguće ponovno iskoristiti ovu metodu u bilo kojem drugom projektu. PathFinder skripta koristi Unity komponentu NavMeshAgent te jednostavno omogućava objektu koji sadrži ovu skriptu da se kreče unutar svijeta. 
+Tu se nalazi i Soldier skriptirani objekt koji je već prethodno opisan, ali kao podsjetnik, to je skripta koja sadrži informacije, postavke igre i slično. 
+Unutar ove skripte, ali i unutar kompletnog projekta često je vidljiv atribut [SerializeField]. Unity serijalizira samo polja koja su deklarirana kao javna, ali ako želite serijalizirati i privatna polja potrebno je dodati navedeni atribut. Serijalizacija je proces transformiranja podataka u format koji Unity može spremiti te rekonstruirati kada je to potrebno.
+K\^od ispod~\ref{Scanner} prikazuje dio Scanner skripte, gdje je prikazan način na koji se koristi ekstenzija za Transform, a ~\ref{TransformExtension} skriptu gdje je prikazan način na koji se proširuju klase.
+\begin{lstlisting}[caption={Pretraživanje područja}, label=Scanner]
+void OnDrawGizmos()
+    {
+        Gizmos.color = Color.green;
+        Gizmos.DrawLine(transform.position, transform.position + GetViewAngle(fieldOfView / 2) * GetComponent().radius);
+        Gizmos.DrawLine(transform.position, transform.position + GetViewAngle(-fieldOfView / 2) * GetComponent().radius);
+    }
+    Vector3 GetViewAngle(float angle)
+    {
+        float radian = (angle + transform.eulerAngles.y) * Mathf.Deg2Rad;
+        return new Vector3(Mathf.Sin(radian), 0, Mathf.Cos(radian));
+    }
+    public List ScanForTargets()
+    {
+        print("Scanning");
+        List targets = new List();
+        Collider[] results = Physics.OverlapSphere(transform.position, ScanRange);
+
+        for (int i = 0; i < results.Length; i++)
+        {
+            var player = results[i].transform.GetComponent();
+
+            if (player == null)
+            {
+                continue;
+            }
+            if (!transform.IsInLineOfSight(results[i].transform.position, fieldOfView, layerMask, Vector3.up))
+            {
+                continue;
+            }
+            else
+            {
+                targets.Add(player);
+            }
+        }
+        PrepareScan();
+        return targets;
+    }
+\end{lstlisting}
+
+Gizmos je klasa koja iscrtava linije, različite oblike i slično, to je vidljivo samo tijekom rada unutar scene, ali ne i u igri.
+
+\begin{lstlisting}[caption={Proširivanje klasa}, label=TransformExtension]
+namespace SharedGame.Extensions
+{
+    public static class TransformExtensions
+    {
+        /// 
+
+        /// Check if the target is whitin the line of sight
+        /// 
+
+        /// transform origin
+        /// target direction
+        /// field of view
+        /// check against layers
+        /// transform origin offset
+        /// yes or no
+        public static bool IsInLineOfSight(this Transform origin,Vector3 target,float fieldOfView,LayerMask collisionMask,Vector3 offset)
+        {
+            Vector3 direction = target - origin.position;
+
+            if (Vector3.Angle(origin.forward, direction.normalized) < fieldOfView / 2)
+            {
+                float distanceToTarget = Vector3.Distance(origin.position, target);
+                //view blocked
+                if (Physics.Raycast(origin.position + offset + origin.forward* .3f, direction.normalized, distanceToTarget, collisionMask))
+                {
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
+    }
+}
+\end{lstlisting}
+
+Kao što je već navedeno EnemyPatrol koristi gore navedene skripte, Scanner i PathFinder. Osim toga koristi i WaypointController, to je skripta s kojom se na jednostavan način određuje kojim će se prostorom kretati neprijatelj tijekom patrole. Sve što je potrebno napraviti je pridružiti objektu roditelj WaypointController skriptu te dodati broj djece kojima se dodaje skripta Waypoint te tako određujemo prostor kojim će se neprijatelj kretati. EnemyPatrol skripta određuje nasumičan smjer kojim će se neprijatelj kretati kao i period vremena koliko će se zadržavati na svakoj od pozicija kako bi se postiglo što realnije ponašanje neprijatelja. K\^od ispod prikazuje implementaciju navedenog~\ref{EnemyPatrol}.
+\begin{lstlisting}[caption={Patroliranje neprijatelja}, label=EnemyPatrol]
+private void EnemyPlayer_OnTargetSelected(Player obj)
+    {
+        if (pathFinder.Agent.isActiveAndEnabled)
+        {
+            pathFinder.Agent.isStopped = true;
+        }
+    }
+    private void EnemyHealth_OnDeath()
+    {
+        if (pathFinder.Agent.isActiveAndEnabled)
+        {
+            pathFinder.Agent.isStopped = true;
+            enemyHealthBar.SetActive(false);
+            transform.GetComponentInChildren().enabled = false;
+        }
+    }
+    private void WaypointController_OnWaypointChanged(Waypoint waypoint)
+    {
+        pathFinder.SetTarget(waypoint.transform.position);
+    }
+    private void PathFinder_OnDestinationReached()
+    {
+        //patroller
+        GameManager.Instance.Timer.Add(waypointController.SetNextWaypoint, Random.Range(waitTimeMin, waitTimeMax));
+    }
+\end{lstlisting}
+
+EnemyHealth i EnemyAnimation su implementiran na identičan način kao već opisane skripte za iste funkcionalnosti igrača te zbog toga nisu detaljnije prikazane. 
+EnemyShoot skripta implementira ponašanje neprijatelja u trenutku kad detektira igrača. Nakon što neprijatelj otkrije igrača prestaje s patroliranjem te ulazi u stanje svjesnosti te napada igrača, počinje ciljati i pucati. To je riješeno tako da puca u nasumičnim intervalima i u kratkim rafalima. Iako vrlo precizno prema igraču, ipak uz mali pomak kako bi pucanje bilo što realnije. Osim toga neprijatelj se saginje te ponovno puni oružje ako potroši sav spremnik. U slučaju da igrač nije više u vidnom polju neprijatelja, neprijatelj mijenja stanje u nesvjesno te nakon kraćeg perioda nastavlja s patroliranjem. K\^od skripte nalazi se ispod~\ref{EnemyShoot}.
+\begin{lstlisting}[caption={Ponašanje neprijatelja}, label=EnemyShoot]
+private void EnemyPlayer_OnTargetSelected(Player target)
+    {
+        print("OnTargetSelected");
+        ActiveWeapon.AimTarget = target.transform;
+        ActiveWeapon.AimTargetOffset = Vector3.up * 1.0f;
+        StartBurst();
+    }
+    void CrouchState()
+    {
+        bool takeCover = Random.Range(0, 2) == 0;
+
+        if (!takeCover)
+        {
+            return;
+        }
+        float distanceToTarget = Vector3.Distance(transform.position, ActiveWeapon.AimTarget.position);
+        if (distanceToTarget > 15)
+        {
+            enemyPlayer.GetComponent().IsCrouched = true;
+        }
+    }
+    void StartBurst()
+    {
+        if (!enemyPlayer.EnemyHealth.IsAlive && !CanSeeTarget())
+        {
+            return;
+        }
+        CheckReload();
+        CrouchState();
+        shouldFire = true;
+       
+        GameManager.Instance.Timer.Add(EndBurst, Random.Range(burstDurationMin, burstDurationMax));
+    }
+    void EndBurst()
+    {
+        shouldFire = false;
+        if (!enemyPlayer.EnemyHealth.IsAlive)
+        {
+            return;
+        }
+        CheckReload();
+        CrouchState();
+
+        if (CanSeeTarget())
+        {
+            print(CanSeeTarget());
+            GameManager.Instance.Timer.Add(StartBurst, shootingSpeed);
+        }
+    }
+    bool CanSeeTarget()
+    {
+        if (!transform.IsInLineOfSight(ActiveWeapon.AimTarget.position, 90, enemyPlayer.playerScanner.layerMask, Vector3.up))
+        {
+            enemyPlayer.ClearTargetAndScan();
+            return false;
+        }
+        return true;
+    }
+    void CheckReload()
+    {
+        if (ActiveWeapon.reloader.RoundsRemainingInClip == 0)
+        {
+            CrouchState();
+            ActiveWeapon.Reload();
+        }
+    }
+    void Update()
+    {
+        if (!shouldFire || !CanFire || !enemyPlayer.EnemyHealth.IsAlive)
+        {
+            return;
+        }
+        else
+        {
+            ActiveWeapon.Fire();
+        }
+    }
+\end{lstlisting}
+\subsection{Implementacija ostalih funkcionalnosti}
+Kako bi se omogućilo prikupljanje stvari i korištenje istih napravljen je sistem spremnika za stvari. Uz to su napravljene skripte za prikupljanje stvari. Kako bi se omogućilo ponovno prikupljanje stvari napravljena je skripta koja uklanja stvar kada se prikupi, ali je isto tako ponovno aktivira nakon određenog perioda vremena ako je to potrebno. Tim rečenim biti će i opisana pomoćna klasa Timer koja je korištena na više mjesta kako bi se omogućilo pračenje određenih vremenskih perioda kao što je vrijeme potrebno za ponovno aktiviranje stvari, ponovno pucanje i slično.
+Prva skripta je Container, to je skripta kojom je definirano koje je stvari moguće prikupiti, da pri tom ostanu kod igrača. S njom je definirano ime stvari, identifikacija spremnika te maksimalan broj određene stvari unutar spremnika. Unutar skritpe su implementirane metode za dodavanje stvari u spremnik, potrošnju ako dođe do nje, npr. ponovnim punjenjem oružja smanjuje se broj metaka u spremniku, a prikupljanjem metaka tijekom igranja taj se broj povečava. Container je referenciran unutar WeaponReloader skripte, tako da je za svaki objekt koji sadrži ovu skriptu potrebno pridružiti odgovarajuči spremnik. 
+Prikupljanje stvari iz prostora je riješeno pomoću PickupItem skritpe, unutar te implementirana je virtualna metoda OnPickup, a svaka skripta koja implementira prikupljanje stvari nasljeđuje ovu klasu. K\^od je vrlo jednostavan, svaki objekt koji je moguće prikupiti sadrži komponentu sudarač te se provjerava sudara li se sa igračem preko taga. Ponašanje nakon prikupljanja je definirano u skriptama koje implementiraju različite stvari koje se mogu prikupiti kao što su WeaponPickup, AmmoPickup itd. Nakon što je stvar prikupljena deaktivira se te ako je to definirano aktivira se nakon određenog perioda vremena što je opisano skriptama Respawner i Timer. Respawner koristi Timer na način da jednostavno aktivira objekt nakon što prođe definirani period vremena. Timer skripta koristi C\# događaje te izvršava događaje unutar definiranog vremena. To znači da ako je potrebno za neku radnju nekoliko sekunda prije nego se ponovno može pokrenuti, ista se dodaje u listu događaja te se definira broj sekundi koliko će se radnja izvršavati. K\^od skritpe Timer prikazan je ispod~\ref{Timer}.
+\begin{lstlisting}[caption={Odbrojavač}, label=Timer]
+public class Timer : MonoBehaviour
+{
+    private class TimedEvent
+    {
+        public float TimeToExecute;
+        public Callback Method;
+    }
+    private List<TimedEvent> events;
+
+    public delegate void Callback();
+
+    void Awake()
+    {
+        events = new List<TimedEvent>();
+    }
+    public void Add(Callback method, float inSeconds)
+    {
+        events.Add(new TimedEvent
+        {
+            Method = method,
+            TimeToExecute = Time.time + inSeconds
+        });
+    }
+    void Update()
+    {
+        if (events.Count == 0)
+        {
+            return;
+        }
+        for (int i = 0; i < events.Count; i++)
+        {
+            var timedEvent = events[i];
+            if (timedEvent.TimeToExecute <= Time.time)
+            {
+                timedEvent.Method();
+                events.Remove(timedEvent);
+            }
+        }
+    }
+}
+\end{lstlisting}
+Vožnja automobila nije implementirana unutar ovog projekta već je korišten gotov projekt koji je preuzet sa stranica trgovine za dodatke. Stranica tvorca navedenog projekta je \url{http://www.bonecrackergames.com}. Korištenje ove funkcionalnosti je vrlo jednostavno, potrebno je na vozilo dodati RealisticCarController skriptu, RealisticCarCamera skriptu te potom aktivirati sudarače za kotače vozila, tako što se odabere odgovarajuči model kotača na vozilu. Uz to s ovim projektom dolazi i sistem za jednostavno dodavanje zvukova, svijetla kao i različitih vizualnih efekata automobila tijekom vožnje te grafičko sučelje kada je igrač unutar vozila.
+Ono što je implementirano unutar Dionyzus projekta je ulazak i izlazak iz automobila na način da je to prikazano preko animacija. Skripte su vrlo jednostavne, te neće biti detaljno prikazane. Implementirane su na način da se aktiviraju i deaktiviraju potrebne komponente ovisno o tome ulazi li igrač u automobil ili izlazi. Osim toga definirane su različite pozicije kako bi se što realnije mogle izvršiti animacije koje prikazuju navedene aktivnosti.
+ 
+Tijekom igre igrač obavlja određene zadatake, odnosno misije te se kada je vrijeme za to aktiviraju kratki filmovi (engl.~\textit{Cutscenes}) koji prikazuju scenu bez aktivnosti korisnika. To su filmovi koji se odvijaju unutar perioda vremena, odnosno u određenim trenutcima se pokreču različite animacije, pomak kamere, mijenjanje kutova prikaza, prikaz dialoga i slično. Na taj način je omogućeno upoznavanje s pričom igre koja je predefinirana. Te funkcionalnosti unutar ovog projekta su riješene korištenjem IEnumerator sučelja. To je sučelje koje implementira vrijeme koje je potrebno da se određene aktivnosti odviju, dakle korisnik ne utječe na iste već se odvijaju prema definiranom redoslijedu. Dakle sve što je potrebno unutar skritpe je definirati što će se dogoditi nakon određenog vremenskog perioda. To može biti:
+ \begin{itemize}
+  \item Izmjenjivanje različitih kamera kao i promjena kuta gledanja istih.
+  \item Pojavljivanje teksta koje može dodatno opisati scenu.
+  \item Aktiviranje različitih zvukova kako bi se dočarala atmosfera unutar scene .
+  \item Aktiviranje dijaloga između likova unutar igre.
+  \item Definiranje automatskog kretanja lika do određene destinacije.
+  \item Aktiviranje i deaktiviranje obavijesti.
+ \end{itemize}
+Navedene mogućnosti su korištene ne samo za kratke filmove već i kada igrač treba dobiti dodatne informacije o trenutnoj misiji i slično. 
+Implementiranje grafičkog prikaza filma radi se pomoću sučelja, dakle potrebno je dodati u scenu glavne aktere, postaviti kamere, urediti prostor gdje će se odvijati film, ubaciti različite zvukove, animirati likove, dati im glas i slično.
+
+Implementacija misija je izvršena preko zasebnih skripti gdje svaka definira različite informacija ovisno o tome što igrač treba raditi kako bi je izvršio. Glavna skripta je MissionManager koja prati tijek igre tako što svaka pojedina misija ima vlastiti broj koji se povećava ovisno o tome koja je misija trenutno aktivna. Svaka misija isto tako može imati dodatne zadatke koji su sadržani unutar pojedinačne misije te se zatvaraju po završavanju zadatka. U trenutku kada je izvršena kompletna misija, broj trenutne misije se povečava za jedan te se aktivira iduća misija. Na ovaj način je vrlo jednostavno moguće dodati nove misije neovisno o ostalima. K\^od skripti za svaku pojedinu misiju neće biti prikazan iz razloga što se radi o vrlo jednostavno slaganju različitih sekvenci događja gdje se aktiviraju, odnosno deaktiviraju različiti objekti po potrebi te se daju dodatne informacije igraču kako bi znao što raditi. Problem pronalska odgovarajučih lokacija riješen je na način da je igraču dodan pokazivač koji je uvijek usmjeren prema idučem zadatku na taj način korisnik uvijek zna što iduče treba napraviti, a osim toga pokretanjem izbornika pauze u svakom trenutku može ponovno pročitati opis zadatka.
+
+Grafičko sučelje je vrlo važan element svake igre, osim što je vizualna prezentacija određenih parametara unutar igre, može imati i važnu ulogu kada je u pitanju zainteresiranost igrača za igru. Ako sučelje nije dovoljno intuitivno moguće je pokvariti igračima iskustvo igranja igre, a ako je nedovoljno interesantno napravljeno može ostaviti utisak kao da se ne radi o dobro razrađenom projektu.
+Grafičko sučelje u Dionyzus projektu možemo podijeliti na dva dijela, prvi dio je prezentacija osnovnih podataka tijekom igranja, kao što su status spremnika, trenutno oružje u uporabi i energija lika, te drugi dio gdje su glavni izbornik i izbornik pauze. U osnovi su oba dio Canvasa. To je objekt igre koji sadrži sve ostale elemente grafičkog sučelja, odnosno elementi se dodaju kao djeca Canvasa. Dizajniranje sučelja se radi unutar prozora scene, najčešće je u projekt potrebno dodati određene teksture koje će predstavljati različite elemente, tako je npr. za prikaz spremnika upotrebljena slika torbe za oružje te su iznad toga prikazana odgovarajuća oružja. Isto tako su prikazani i dinamički elementi kao što su energija i broj metaka preostao u spremniku, ali je promjena tih podataka, kako vizualno tako brojevno napisana unutar skripti. 
+Osim osnovnih elemenata, tijekom igranja igraču se prikazuju tzv. uputstva, odnosno naredbe koje je potrebno napraviti kako bi se određena aktivnost izvršila, npr. ulazak i izlazak iz automobila, započinjanje razgovora i slično.
+Izrada izbornika moguća je na više načina, osnovni pristup je preko Canvasa gdje se dodaju elementi kao što su slika koja predstavlja pozadinu, tekstualne prezentacije različitih mogućnosti unutar izbornika, i slično. Drugi način je izraditi trodimenzionalni prostor gdje je onda moguće dodati različite objekte koje je potom moguće i animirati kako bi se postigli zanimljivi vizualni efekti. Osim toga moguće je dodati i zvučne efekte, to može biti glazba u pozadini, kao i različiti zvučni efekti koji se aktiviraju pritiskom na neku od opcija. 
+
+Funkcionalnosti različitih botuna moguće je opisati unutar skripti, ali isto tako i unutar samog sučelja. Jednostavne funkcionalnosti kao što su zatvaranje i otvaranje nekog od prozora moguće je jednostavno implementirati unutar nadglednog prozora.
