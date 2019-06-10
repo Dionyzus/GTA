@@ -1,9 +1,9 @@
 \section{Uvod}
-U radu će biti obrađena izrada 3D igre u Unity3D, motivacija za rad je uvod u granu informacijskih tehnologija (IT) koja se bavi izradom igara pomoću modernog pogonskog sklopa za izradu igara (engl.~\textit{Game engine}). Pristup izradi igre je bio da se omogući što lakše ponovno korištenje programskih rješenja unutar igre, te isto tako da se stvori sustav koji se jednostavno može proširiti.
+U radu je obrađena izrada 3D igre u Unity3D. Motivacija za rad je uvod u granu informacijskih tehnologija (IT) koja se bavi izradom igara pomoću modernog pogonskog alat za izradu igara (engl.~\textit{Game engine}). Pristup izradi igre je bio da se omogući što lakše ponovno korištenje programskih rješenja unutar igre, te da se stvori sustav koji se jednostavno može proširiti.
 
 Obrađena su ključna poglavlja za izradu velikog svijeta te sustava potrebnog za funkcioniranje igre:
 \begin{itemize}
- \item Teren, odnosno područje gdje će se odvijati radnja,
+ \item teren, odnosno područje gdje će se odvijati radnja,
  \item sustav za upravljanje igračem,
  \item osnovno ponašanje neprijatelja,
  \item sustav napretka kroz igru.
@@ -15,15 +15,16 @@ Obrađena su ključna poglavlja za izradu velikog svijeta te sustava potrebnog z
  \item upravljanje vozilima.
 \end{itemize}
 
-Svi modeli, ljudi, okolina, oružja itd. su preuzeti iz Unity centra za kupovanje dodataka za igru. Koriste se isključivo u svrhu uljepšavanja same igre, ključni izvori će biti navedeni u radu. 
+Svi modeli, ljudi, okolina, oružja itd.~su preuzeti iz Unity centra za kupovanje dodataka za igru. Koriste se isključivo u svrhu uljepšavanja same igre, a ključni izvori će biti navedeni u radu. 
 
-U prvom dijelu rada govorit će se ukratko o Unity te programskom jeziku C\# u kojem su napisane sve skripte potrebne za funkcioniranje igre. Nakon toga će biti opisane najvažnije prednosti rada u Unity, u odnosu na izradu igre od početka, implementaciju fizike, grafike i slično. Isto tako će biti prikazani i opisani neki ključni segmenti Unityja koji su bili korišteni u ovom radu. 
-Potom će biti opisan osnovni pristup prilikom izrade skripti, te glavne komponente koje su potrebne da bi iste funkcionirale u igri. U trećem i četvrtom poglavlju će biti prikazane scene te biti opisana radnja igre. Isto tako će biti navedena rješenja izrađena od drugih osoba, a korištena u ovom radu.
-Na samom kraju navest će se zaključak te kako proširiti sustav.
+U prvom dijelu rada govorit će se ukratko o Unity okruženju te programskom jeziku C\# u kojem su napisane sve skripte potrebne za funkcioniranje igre. Nakon toga opisane su najvažnije prednosti rada u Unity, u odnosu na izradu igre od početka, implementaciju fizike, grafike i slično. Isto tako prikazani su i opisani neki ključni segmenti Unityja koji su bili korišteni u ovom radu. 
 
-Igra započinje scenom u vlaku gdje glavni lik Leon razgovara sa svojim prijateljem Vladislavom o njihovoj trenutnoj životnoj situaciji, koja i nije baš najbolja. Oba lika su u teškoj financijskoj situaciji te im je potrebna promjena kako bi usmjerili svoje živote u pravom smjeru. Vladislav je snalažljiv lik koji na razne načine dolazi do zarade,to su uglavnom sitne prevare, iznuđivanja i slično, dok je Leon viješt lik koji je prošao specijalnu vojnu obuku, ali je zbog incidenta razriješen dužnosti. Leonu se ne sviđa to što Vladislav radi, ali nerijetko mu pomaže izbaviti ga iz nevolje, naravno zbog njihovog velikog prijateljstva. Vladislav ovaj put iznosi opasan plan pljaćke banke, gdje bi Leon trebao biti samo pomoćnik, odnosno vozač automobila za bijeg.
+U sljedećem poglavlju opisan je osnovni pristup prilikom izrade skripti, te glavne komponente koje su potrebne da bi iste funkcionirale u igri. U trećem i četvrtom poglavlju su prikazane scene te opisana radnja igre. Isto tako su navedena rješenja koja su izradile druge osoba, a koja su korištena u ovom radu.
+Na samom kraju naveden je zaključak te prijedlozi kako proširiti sustav.
 
-Leon, iako svjestan opasnosti,unatoč negodovanju i ovaj put pristaje pomoći što će na kraju skoro platiti vlastitim životom. Čudom Leon preživljava, saznaje da je riječ o podvali, uvjerenja je da je Vladislav ubijen te se odlučuje na osvetu gdje će mu sva obuka koju je prošao pomoći na putu ostvarivanja iste. Tijekom igre Leon uz suradnju s drugim prijateljima doznaje različite informacije te otkriva zamršeni mafijaški lanac kojem odluči stati na kraj.
+Igra započinje scenom u vlaku gdje glavni lik Leon razgovara sa svojim prijateljem Vladislavom o njihovoj trenutnoj životnoj situaciji, koja i nije baš najbolja. Oba lika su u teškoj financijskoj situaciji te im je potrebna promjena kako bi usmjerili svoje živote u pravom smjeru. Vladislav je snalažljiv lik koji na razne načine dolazi do zarade, to su uglavnom sitne prevare, iznuđivanja i slično, dok je Leon vješt lik koji je prošao specijalnu vojnu obuku, ali je zbog incidenta razriješen dužnosti. Leonu se ne sviđa to što Vladislav radi, ali nerijetko mu pomaže izbaviti ga iz nevolje, naravno zbog njihovog velikog prijateljstva. Vladislav ovaj put iznosi opasan plan pljačke banke, gdje bi Leon trebao biti samo pomoćnik, odnosno vozač automobila za bijeg.
+
+Leon, iako svjestan opasnosti, unatoč negodovanju i ovaj put pristaje pomoći, što će na kraju skoro platiti vlastitim životom. Čudom Leon preživljava, saznaje da je riječ o podvali, uvjerenja je da je Vladislav ubijen te se odlučuje na osvetu gdje će mu sva obuka koju je prošao pomoći na putu ostvarivanja iste. Tijekom igre Leon uz suradnju s drugim prijateljima doznaje različite informacije te otkriva zamršeni mafijaški lanac kojem odluči stati na kraj.
 
 Kako se radi o otvorenom svijetu, igrač ima mogućnost istraživanja svijeta te slobodnu kretnju preko cijele mape. Pri tom sakuplja različite predmete, kao što su oružja, municija, energetski paketi te različite stvari koje su mu potrebne kako bi odradio misiju.
 
