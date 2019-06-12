@@ -877,6 +877,7 @@ enemyPlayer.playerScanner.layerMask, Vector3.up))
     }
 \end{lstlisting}
 \subsection{Implementacija ostalih funkcionalnosti}
+\subsubsection*{Prikupljanje stvari}
 Kako bi se omogućilo prikupljanje stvari i korištenje istih napravljen je sistem
 spremnika za stvari. Uz to su napravljene skripte za prikupljanje stvari. Kako bi se
 omogućilo ponovno prikupljanje stvari napravljena je skripta koja uklanja stvar kada
@@ -951,6 +952,7 @@ public class Timer : MonoBehaviour
     }
 }
 \end{lstlisting}
+ \subsubsection*{Vožnja automobila}
 Vožnja automobila nije implementirana unutar ovog projekta već je korišten gotov
 projekt koji je preuzet sa stranica trgovine za dodatke. Stranica tvorca navedenog
 projekta je \url{http://www.bonecrackergames.com}. Korištenje ove funkcionalnosti je
@@ -966,7 +968,8 @@ biti detaljno prikazane. Implementirane su na način da se aktiviraju i deaktivi
 potrebne komponente ovisno o tome ulazi li igrač u automobil ili izlazi. Osim toga,
 definirane su različite pozicije kako bi se što realnije mogle izvršiti animacije
 koje prikazuju navedene aktivnosti.
- 
+
+ \subsubsection*{Kratki filmovi}
 Tijekom igre igrač obavlja određene zadatake, odnosno misije te se kada je vrijeme
 za to aktiviraju kratki filmovi (engl.~\textit{Cutscenes}) koji prikazuju scenu bez
 aktivnosti korisnika. To su filmovi koji se odvijaju unutar perioda vremena, odnosno
@@ -992,6 +995,7 @@ Implementiranje grafičkog prikaza filma radi se pomoću sučelja. Potrebno je d
 scenu glavne aktere, postaviti kamere, urediti prostor gdje će se odvijati film,
 ubaciti različite zvukove, animirati likove, dati im glas i slično.
 
+ \subsubsection*{Sustav misija}
 Implementacija misija je izvršena preko zasebnih skripti gdje svaka definira
 različite informacija ovisno o tome što igrač treba raditi kako bi je izvršio.
 Glavna skripta je ~\texttt{MissionManager} koja prati tijek igre tako što svaka pojedina
@@ -1008,6 +1012,7 @@ je igraču dodan pokazivač koji je uvijek usmjeren prema idućem zadatku. Na ta
 korisnik uvijek zna što sljedeće treba napraviti, a osim toga pokretanjem izbornika
 pauze u svakom trenutku može ponovno pročitati opis zadatka.
 
+ \subsubsection*{Grafičko sučelje}
 Grafičko sučelje je vrlo važan element svake igre. Osim što je vizualna prezentacija
 određenih parametara unutar igre, može imati i važnu ulogu kada je u pitanju
 zainteresiranost igrača za igru. Ako sučelje nije dovoljno intuitivno moguće je
